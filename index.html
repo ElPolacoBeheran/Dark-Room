@@ -109,8 +109,10 @@ input[type=range]{width:100%;accent-color:var(--amber)}
   <span class="stat" id="statLabel"></span>
   <button id="zipBtn" class="primary" style="display:none">Descargar ZIP</button>
   <button class="primary" id="pickBtn" data-i18n="pick">Elegir carpeta</button>
+  <button class="ghost" id="addBtn" data-i18n="addPhotos">Agregar fotos</button>
   <button class="ghost icon" id="cfgBtn" title="Config">⚙</button>
   <input type="file" id="fileInput" webkitdirectory directory multiple accept="image/*" style="display:none">
+  <input type="file" id="filesInput" multiple accept="image/*" style="display:none">
 </header>
 
 <div id="configPanel">
@@ -218,7 +220,8 @@ let lang='en';
 
 /* ---------- i18n ---------- */
 const T = {
-  es:{ appName:'CUARTO OSCURO', noFolder:'Ninguna carpeta seleccionada', pick:'Elegir carpeta',
+  es:{ appName:'CUARTO OSCURO', noFolder:'Ninguna carpeta seleccionada', pick:'Elegir carpeta', addPhotos:'Agregar fotos',
+    loaded:n=>`${n} imagen${n===1?'':'es'} cargada${n===1?'':'s'}`,
     emptyText:'Elegí una carpeta con imágenes. Recortalas, ajustá luz y color, agregales un marco y descartá las que no sirvan. Cuando termines, descargá todo junto como un .zip a tu carpeta de Descargas — no se toca nada del disco hasta que vos lo pedís.',
     saved:'Guardada', removeTitle:'Quitar del grupo',
     stats:(p,s,d)=>`<b>${p}</b> por revisar · <b>${s}</b> guardadas · <b>${d}</b> descartadas`,
@@ -231,7 +234,8 @@ const T = {
     applyCrop:'Aplicar recorte', resetBtn:'Restablecer', discard:'Quitar del grupo',
     close:'Cerrar', save:'Guardar', processing:'Procesando...',
     language:'Idioma', theme:'Tema', dark:'Oscuro', light:'Claro' },
-  en:{ appName:'DARKROOM', noFolder:'No folder selected', pick:'Choose folder',
+  en:{ appName:'DARKROOM', noFolder:'No folder selected', pick:'Choose folder', addPhotos:'Add photos',
+    loaded:n=>`${n} image${n===1?'':'s'} loaded`,
     emptyText:"Choose a folder with images. Crop them, adjust light and color, add a frame, and discard the ones you don't want. When you're done, download everything as one .zip to your Downloads folder — nothing on disk is touched until you ask.",
     saved:'Saved', removeTitle:'Remove from group',
     stats:(p,s,d)=>`<b>${p}</b> to review · <b>${s}</b> saved · <b>${d}</b> discarded`,
@@ -360,15 +364,29 @@ function buildFrame(src, key){
 
 /* ---------- Folder / grid ---------- */
 pickBtn.addEventListener('click', ()=>fileInput.click());
-fileInput.addEventListener('change', ()=>{
-  const files=[...fileInput.files].filter(f=>IMG_EXT.test(f.name));
+fileInput.addEventListener('change', ()=>{ ingestFiles(fileInput.files); fileInput.value=''; });
+const addBtn=document.getElementById('addBtn');
+const filesInput=document.getElementById('filesInput');
+addBtn.addEventListener('click', ()=>filesInput.click());
+filesInput.addEventListener('change', ()=>{ ingestFiles(filesInput.files); filesInput.value=''; });
+
+function ingestFiles(fileList){
+  const files=[...fileList].filter(f=>IMG_EXT.test(f.name));
   if(!files.length) return;
-  items=files.map(f=>({name:f.name, file:f, url:URL.createObjectURL(f), status:'pending'}))
-             .sort((a,b)=>a.name.localeCompare(b.name));
-  zip=new JSZip(); zipCount=0; zipBtn.style.display='none'; folderChosen=true;
-  pathLabel.textContent = files[0].webkitRelativePath ? files[0].webkitRelativePath.split('/')[0] : `${files.length} images`;
+  if(!zip){ zip=new JSZip(); zipCount=0; }
+  const existingKeys=new Set(items.map(it=>it.name+'|'+it.file.size));
+  files.forEach(f=>{
+    const key=f.name+'|'+f.size;
+    if(existingKeys.has(key)) return;
+    existingKeys.add(key);
+    items.push({name:f.name, file:f, url:URL.createObjectURL(f), status:'pending'});
+  });
+  items.sort((a,b)=>a.name.localeCompare(b.name));
+  folderChosen=true;
+  updatePathLabel();
   renderGrid();
-});
+}
+function updatePathLabel(){ pathLabel.textContent=T[lang].loaded(items.length); }
 
 function renderGrid(){
   empty.style.display = items.length ? 'none' : 'block';
@@ -642,17 +660,28 @@ window.addEventListener('mouseup', ()=>{ dragMode=null; });
 
 function drawOverlay(){
   octx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
+  const hasSel = sel && sel.w>=4 && sel.h>=4;
+  if(hasSel){
+    octx.fillStyle='rgba(0,0,0,.45)'; octx.fillRect(0,0,overlayCanvas.width,overlayCanvas.height);
+    octx.clearRect(sel.x,sel.y,sel.w,sel.h);
+  }
   if(guidesOn){
-    const w=overlayCanvas.width, h=overlayCanvas.height;
-    octx.strokeStyle='rgba(255,255,255,.35)'; octx.lineWidth=1;
-    for(let i=1;i<3;i++){
-      octx.beginPath(); octx.moveTo(w*i/3,0); octx.lineTo(w*i/3,h); octx.stroke();
-      octx.beginPath(); octx.moveTo(0,h*i/3); octx.lineTo(w,h*i/3); octx.stroke();
+    octx.strokeStyle= hasSel ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.3)';
+    octx.lineWidth=1;
+    if(hasSel){
+      for(let i=1;i<3;i++){
+        octx.beginPath(); octx.moveTo(sel.x+sel.w*i/3, sel.y); octx.lineTo(sel.x+sel.w*i/3, sel.y+sel.h); octx.stroke();
+        octx.beginPath(); octx.moveTo(sel.x, sel.y+sel.h*i/3); octx.lineTo(sel.x+sel.w, sel.y+sel.h*i/3); octx.stroke();
+      }
+    } else {
+      const w=overlayCanvas.width, h=overlayCanvas.height;
+      for(let i=1;i<3;i++){
+        octx.beginPath(); octx.moveTo(w*i/3,0); octx.lineTo(w*i/3,h); octx.stroke();
+        octx.beginPath(); octx.moveTo(0,h*i/3); octx.lineTo(w,h*i/3); octx.stroke();
+      }
     }
   }
-  if(!sel || sel.w<4 || sel.h<4) return;
-  octx.fillStyle='rgba(0,0,0,.45)'; octx.fillRect(0,0,overlayCanvas.width,overlayCanvas.height);
-  octx.clearRect(sel.x,sel.y,sel.w,sel.h);
+  if(!hasSel) return;
   octx.strokeStyle='#e2a23b'; octx.lineWidth=1.5; octx.strokeRect(sel.x,sel.y,sel.w,sel.h);
   const hs=6;
   const pts=[[sel.x,sel.y],[sel.x+sel.w/2,sel.y],[sel.x+sel.w,sel.y],
