@@ -478,10 +478,12 @@ function fitCanvas(){
   const rad=rotation*Math.PI/180;
   const bw=Math.round(Math.abs(srcBitmap.width*Math.cos(rad))+Math.abs(srcBitmap.height*Math.sin(rad)));
   const bh=Math.round(Math.abs(srcBitmap.width*Math.sin(rad))+Math.abs(srcBitmap.height*Math.cos(rad)));
-  const maxW=Math.min(680, window.innerWidth*0.48);
-  const maxH=window.innerHeight*0.62;
-  const dispScale=Math.min(maxW/bw, maxH/bh, 1);
+  // Fill as much of the actual editor stage as possible — no artificial low cap.
+  const stageRect=document.querySelector('.ed-stage').getBoundingClientRect();
+  const maxW=Math.max(260, stageRect.width-28);
+  const maxH=Math.max(260, stageRect.height-28);
   fitScale=1; // canvas buffer stays at native resolution — only the CSS display size is scaled down
+  const dispScale=Math.min(maxW/bw, maxH/bh, 1); // never upscale past native pixels, only shrink to fit
   const dw=Math.round(bw*dispScale), dh=Math.round(bh*dispScale);
   [baseCanvas, overlayCanvas].forEach(c=>{ c.width=bw; c.height=bh; c.style.width=dw+'px'; c.style.height=dh+'px'; });
 }
