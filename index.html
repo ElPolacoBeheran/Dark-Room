@@ -64,12 +64,15 @@ body.dragging::before{content:attr(data-drop-label);position:fixed;top:50%;left:
 .card .badge{position:absolute;top:6px;left:6px;font-size:10px;padding:2px 6px;border-radius:3px;background:var(--amber);color:#201400;font-weight:700}
 
 #configPanel{position:fixed;top:64px;right:20px;background:var(--panel);border:1px solid var(--line);
-  border-radius:8px;padding:14px;z-index:60;display:none;min-width:190px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  border-radius:8px;padding:14px;z-index:60;display:none;min-width:220px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #configPanel.show{display:block}
 #configPanel h3{font-size:11px;color:var(--ink-dim);margin:0 0 6px;letter-spacing:.04em}
 #configPanel .row{display:flex;gap:8px;margin-bottom:12px}
-#configPanel .row:last-child{margin-bottom:0}
 #configPanel .row button{flex:1;padding:8px 6px;font-size:12px}
+.shortcuts{display:flex;flex-direction:column;gap:5px}
+.shortcuts div{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-dim)}
+.shortcuts kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 7px;
+  font-family:monospace;font-size:11px;color:var(--ink);flex-shrink:0}
 
 #editor{position:fixed;inset:0;z-index:50;background:rgba(10,10,11,.92);display:none}
 #editor.open{display:flex}
@@ -127,9 +130,20 @@ input[type=range]{width:100%;accent-color:var(--amber)}
     <button id="langEn">English</button>
   </div>
   <h3 data-i18n="theme">Tema</h3>
-  <div class="row">
+  <div class="row" style="margin-bottom:14px">
     <button id="themeDark" data-i18n="dark">Oscuro</button>
     <button id="themeLight" data-i18n="light">Claro</button>
+  </div>
+  <h3 data-i18n="shortcutsTitle">Atajos de teclado</h3>
+  <div class="shortcuts">
+    <div><span data-i18n="applyCrop">Aplicar recorte</span><kbd>L</kbd></div>
+    <div><span data-i18n="resetBtn">Restablecer</span><kbd>R</kbd></div>
+    <div><span data-i18n="discard">Quitar del grupo</span><kbd>M</kbd></div>
+    <div><span data-i18n="save">Guardar</span><kbd>K</kbd></div>
+    <div><span data-i18n="rotateReset">Ángulo a 0°</span><kbd>O</kbd></div>
+    <div><span data-i18n="guidesToggle">Alternar guías</span><kbd>G</kbd></div>
+    <div><span data-i18n="close">Cerrar</span><kbd>Esc</kbd></div>
+    <div><span data-i18n="prevNext">Foto anterior / siguiente</span><kbd>← →</kbd></div>
   </div>
 </div>
 
@@ -216,7 +230,7 @@ let items=[]; // {name, file, url, status}
 let zip=null, zipCount=0, folderChosen=false;
 let current=null;
 let srcBitmap=null;
-let rotation=0, fitScale=1, previewZoom=1;
+let rotation=0, fitScale=1, previewZoom=1, viewScale=1;
 let sel=null, lockRatio=null;
 let guidesOn=false, frameChoice='none';
 let dragMode=null, dragStart=null, dragSelStart=null;
@@ -238,7 +252,8 @@ const T = {
     hint:'Ruleta sobre la foto: zoom de vista. Ruleta sobre un slider: ajusta ese valor. Flechas ← → cambian de foto. Arrastrá las esquinas o los lados del recuadro para cambiar su tamaño, o tocá adentro para moverlo. Tocá la misma proporción de nuevo para girarla.',
     applyCrop:'Aplicar recorte', resetBtn:'Restablecer', discard:'Quitar del grupo',
     close:'Cerrar', save:'Guardar', processing:'Procesando...',
-    language:'Idioma', theme:'Tema', dark:'Oscuro', light:'Claro' },
+    language:'Idioma', theme:'Tema', dark:'Oscuro', light:'Claro',
+    shortcutsTitle:'Atajos de teclado', rotateReset:'Ángulo a 0°', guidesToggle:'Alternar guías', prevNext:'Foto anterior / siguiente' },
   en:{ appName:'DARKROOM', noFolder:'No folder selected', pick:'Choose folder', addPhotos:'Add photos',
     loaded:n=>`${n} image${n===1?'':'s'} loaded`, dropHint:'Drop your photos or a folder here',
     emptyText:"Choose a folder with images. Crop them, adjust light and color, add a frame, and discard the ones you don't want. When you're done, download everything as one .zip to your Downloads folder — nothing on disk is touched until you ask.",
@@ -252,7 +267,8 @@ const T = {
     hint:'Scroll over the photo to zoom the view. Scroll over a slider to adjust it. ← → arrows switch photos. Drag the corners or edges of the box to resize it, or click inside to move it. Click the same ratio again to flip it.',
     applyCrop:'Apply crop', resetBtn:'Reset', discard:'Remove from group',
     close:'Close', save:'Save', processing:'Processing...',
-    language:'Language', theme:'Theme', dark:'Dark', light:'Light' }
+    language:'Language', theme:'Theme', dark:'Dark', light:'Light',
+    shortcutsTitle:'Keyboard shortcuts', rotateReset:'Angle to 0°', guidesToggle:'Toggle guides', prevNext:'Previous / next photo' }
 };
 
 const pickBtn=document.getElementById('pickBtn');
@@ -486,9 +502,16 @@ document.getElementById('navNext').addEventListener('click', ()=>navigate(1));
 window.addEventListener('keydown', e=>{
   if(!editor.classList.contains('open')) return;
   if(['SELECT','INPUT'].includes(e.target.tagName)) return;
+  const k=e.key.toLowerCase();
   if(e.key==='ArrowRight'){ navigate(1); e.preventDefault(); }
   else if(e.key==='ArrowLeft'){ navigate(-1); e.preventDefault(); }
   else if(e.key==='Escape'){ closeEditor(); }
+  else if(k==='l'){ document.getElementById('btnCrop').click(); e.preventDefault(); }
+  else if(k==='r'){ document.getElementById('btnReset').click(); e.preventDefault(); }
+  else if(k==='m'){ document.getElementById('btnDiscard').click(); e.preventDefault(); }
+  else if(k==='k'){ document.getElementById('btnSave').click(); e.preventDefault(); }
+  else if(k==='o'){ setRotation(0); e.preventDefault(); }
+  else if(k==='g'){ btnGuides.click(); e.preventDefault(); }
 });
 
 /* ---------- Per-photo edit cache ---------- */
@@ -567,6 +590,7 @@ function fitCanvas(){
   const maxH=Math.max(260, stageRect.height-28);
   fitScale=1; // canvas buffer stays at native resolution — only the CSS display size is scaled down
   const dispScale=Math.min(maxW/bw, maxH/bh, 1); // never upscale past native pixels, only shrink to fit
+  viewScale=dispScale; // used to keep crop handles a constant on-screen size regardless of source resolution
   const dw=Math.round(bw*dispScale), dh=Math.round(bh*dispScale);
   [baseCanvas, overlayCanvas].forEach(c=>{ c.width=bw; c.height=bh; c.style.width=dw+'px'; c.style.height=dh+'px'; });
 }
@@ -683,7 +707,7 @@ function toCanvasXY(e, canvas){
 function insideSel(x,y){ return sel && x>=sel.x && x<=sel.x+sel.w && y>=sel.y && y<=sel.y+sel.h; }
 function hitHandle(x,y){
   if(!sel) return null;
-  const hs=10;
+  const hs=16/viewScale; // keep a steady ~16px on-screen hit area regardless of source resolution
   const pts={ nw:[sel.x,sel.y], n:[sel.x+sel.w/2,sel.y], ne:[sel.x+sel.w,sel.y],
     w:[sel.x,sel.y+sel.h/2], e:[sel.x+sel.w,sel.y+sel.h/2],
     sw:[sel.x,sel.y+sel.h], s:[sel.x+sel.w/2,sel.y+sel.h], se:[sel.x+sel.w,sel.y+sel.h] };
@@ -764,7 +788,7 @@ function drawOverlay(){
   }
   if(guidesOn){
     octx.strokeStyle= hasSel ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.3)';
-    octx.lineWidth=1;
+    octx.lineWidth=1/viewScale;
     if(hasSel){
       for(let i=1;i<3;i++){
         octx.beginPath(); octx.moveTo(sel.x+sel.w*i/3, sel.y); octx.lineTo(sel.x+sel.w*i/3, sel.y+sel.h); octx.stroke();
@@ -779,13 +803,15 @@ function drawOverlay(){
     }
   }
   if(!hasSel) return;
-  octx.strokeStyle='#e2a23b'; octx.lineWidth=1.5; octx.strokeRect(sel.x,sel.y,sel.w,sel.h);
-  const hs=6;
+  octx.strokeStyle='#e2a23b'; octx.lineWidth=2/viewScale; octx.strokeRect(sel.x,sel.y,sel.w,sel.h);
+  const hs=11/viewScale; // ~11px handle half-size on screen, however large the source photo is
   const pts=[[sel.x,sel.y],[sel.x+sel.w/2,sel.y],[sel.x+sel.w,sel.y],
     [sel.x,sel.y+sel.h/2],[sel.x+sel.w,sel.y+sel.h/2],
     [sel.x,sel.y+sel.h],[sel.x+sel.w/2,sel.y+sel.h],[sel.x+sel.w,sel.y+sel.h]];
-  octx.fillStyle='#e2a23b'; octx.strokeStyle='#20140a'; octx.lineWidth=1;
-  pts.forEach(([px,py])=>{ octx.fillRect(px-hs,py-hs,hs*2,hs*2); octx.strokeRect(px-hs,py-hs,hs*2,hs*2); });
+  octx.fillStyle='#e2a23b'; octx.strokeStyle='#20140a'; octx.lineWidth=1.5/viewScale;
+  pts.forEach(([px,py])=>{
+    octx.beginPath(); octx.arc(px,py,hs,0,Math.PI*2); octx.fill(); octx.stroke();
+  });
 }
 
 document.getElementById('ratios').addEventListener('click', e=>{
