@@ -451,27 +451,39 @@ window.addEventListener('keydown', e=>{
 async function openEditor(i){
   current=i;
   const it=items[i];
-  srcBitmap=await createImageBitmap(it.file);
   Object.values(S).forEach(s=>s.value=0); Object.keys(V).forEach(k=>V[k].textContent='0');
   rotation=0; sRot.value=0; vRot.textContent='0°';
   previewZoom=1; canvasWrap.style.transform='scale(1)';
   sel=null; lockRatio=null; frameChoice='none';
   document.querySelectorAll('#ratios button').forEach(b=>b.classList.toggle('on', b.dataset.r==='free'));
   document.getElementById('edName').textContent=it.name;
-  fitCanvas(); scheduleDraw(); buildFrameIcons();
   editor.classList.add('open');
+
+  // Stage 1: show the already-loaded version instantly (no blank/stale frame while the next one decodes)
+  const quick=new Image(); quick.src=it.url;
+  try{ await quick.decode(); }catch(e){}
+  if(current!==i) return;
+  srcBitmap=quick;
+  fitCanvas(); scheduleDraw(); buildFrameIcons();
+
+  // Stage 2: swap in the fully decoded, full-quality bitmap for editing
+  const full=await createImageBitmap(it.file);
+  if(current!==i) return;
+  srcBitmap=full;
+  fitCanvas(); scheduleDraw(); buildFrameIcons();
 }
 function closeEditor(){ editor.classList.remove('open'); }
 
 function fitCanvas(){
   const rad=rotation*Math.PI/180;
-  const bw=Math.abs(srcBitmap.width*Math.cos(rad))+Math.abs(srcBitmap.height*Math.sin(rad));
-  const bh=Math.abs(srcBitmap.width*Math.sin(rad))+Math.abs(srcBitmap.height*Math.cos(rad));
+  const bw=Math.round(Math.abs(srcBitmap.width*Math.cos(rad))+Math.abs(srcBitmap.height*Math.sin(rad)));
+  const bh=Math.round(Math.abs(srcBitmap.width*Math.sin(rad))+Math.abs(srcBitmap.height*Math.cos(rad)));
   const maxW=Math.min(680, window.innerWidth*0.48);
   const maxH=window.innerHeight*0.62;
-  fitScale=Math.min(maxW/bw, maxH/bh, 1);
-  const w=Math.round(bw*fitScale), h=Math.round(bh*fitScale);
-  [baseCanvas, overlayCanvas].forEach(c=>{ c.width=w; c.height=h; c.style.width=w+'px'; c.style.height=h+'px'; });
+  const dispScale=Math.min(maxW/bw, maxH/bh, 1);
+  fitScale=1; // canvas buffer stays at native resolution — only the CSS display size is scaled down
+  const dw=Math.round(bw*dispScale), dh=Math.round(bh*dispScale);
+  [baseCanvas, overlayCanvas].forEach(c=>{ c.width=bw; c.height=bh; c.style.width=dw+'px'; c.style.height=dh+'px'; });
 }
 function rotatedCanvas(bitmap, deg){
   const rad=deg*Math.PI/180;
