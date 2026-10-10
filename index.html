@@ -247,7 +247,7 @@ let items=[]; // {name, file, url, status}
 let zip=null, zipCount=0, folderChosen=false;
 let current=null;
 let srcBitmap=null;
-let rotation=0, fitScale=1, previewZoom=1, viewScale=1;
+let rotation=0, fitScale=1, previewZoom=1, viewScale=1, panX=0, panY=0;
 let sel=null, lockRatio=null;
 let guidesOn=false, frameChoice='none';
 let dragMode=null, dragStart=null, dragSelStart=null;
@@ -565,7 +565,7 @@ async function openEditor(i){
     frameChoice='none'; lockRatio=null;
     document.querySelectorAll('#ratios button').forEach(b=>b.classList.toggle('on', b.dataset.r==='free'));
   }
-  previewZoom=1; canvasWrap.style.transform='scale(1)';
+  previewZoom=1; panX=0; panY=0; canvasWrap.style.transform='translate(0px,0px) scale(1)';
   sel=null;
   document.getElementById('edName').textContent=it.name;
   editor.classList.add('open');
@@ -702,12 +702,32 @@ attachWheel(sRot);
 document.getElementById('rotM90').addEventListener('click', ()=>setRotation(rotation-90));
 document.getElementById('rotP90').addEventListener('click', ()=>setRotation(rotation+90));
 
-/* ---- zoom (view only) on wheel over image ---- */
-document.querySelector('.ed-stage').addEventListener('wheel', e=>{
+/* ---- zoom (wheel) + pan (right-click drag) — view only, never touches the crop ---- */
+function applyViewTransform(){ canvasWrap.style.transform=`translate(${panX}px,${panY}px) scale(${previewZoom})`; }
+const edStage=document.querySelector('.ed-stage');
+edStage.addEventListener('wheel', e=>{
   e.preventDefault();
   previewZoom=Math.max(0.5, Math.min(4, previewZoom + (e.deltaY<0?0.12:-0.12)));
-  canvasWrap.style.transform=`scale(${previewZoom})`;
+  applyViewTransform();
 }, {passive:false});
+
+edStage.addEventListener('contextmenu', e=>e.preventDefault());
+let panning=false, panStart=null, panOrigin=null;
+edStage.addEventListener('mousedown', e=>{
+  if(e.button!==2) return; // right mouse button only
+  e.preventDefault();
+  panning=true; panStart={x:e.clientX,y:e.clientY}; panOrigin={x:panX,y:panY};
+  edStage.style.cursor='grabbing';
+});
+window.addEventListener('mousemove', e=>{
+  if(!panning) return;
+  panX=panOrigin.x+(e.clientX-panStart.x);
+  panY=panOrigin.y+(e.clientY-panStart.y);
+  applyViewTransform();
+});
+window.addEventListener('mouseup', e=>{
+  if(e.button===2 && panning){ panning=false; edStage.style.cursor=''; }
+});
 
 /* ---- guides ---- */
 btnGuides.addEventListener('click', ()=>{
@@ -765,6 +785,7 @@ function resizeSel(handle, mx, my, base){
 }
 
 overlayCanvas.addEventListener('mousedown', e=>{
+  if(e.button!==0) return; // right-click is reserved for panning the view
   const {x,y}=toCanvasXY(e, overlayCanvas);
   const h=hitHandle(x,y);
   if(h){ dragMode='resize:'+h; dragStart={x,y}; dragSelStart={...sel}; }
@@ -869,7 +890,7 @@ document.getElementById('btnReset').addEventListener('click', async ()=>{
   srcBitmap=await createImageBitmap(it.file);
   Object.values(S).forEach(s=>s.value=0); Object.keys(V).forEach(k=>V[k].textContent='0');
   rotation=0; sRot.value=0; vRot.textContent='0°'; frameChoice='none';
-  sel=null; lockRatio=null; previewZoom=1; canvasWrap.style.transform='scale(1)';
+  sel=null; lockRatio=null; previewZoom=1; panX=0; panY=0; canvasWrap.style.transform='translate(0px,0px) scale(1)';
   document.querySelectorAll('#ratios button').forEach(b=>b.classList.toggle('on', b.dataset.r==='free'));
   fitCanvas(); scheduleDraw(); buildFrameIcons();
 });
