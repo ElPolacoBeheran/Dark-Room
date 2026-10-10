@@ -40,6 +40,10 @@ button.ghost{background:transparent}
 button.on{background:var(--amber);color:#201400;border-color:var(--amber);font-weight:600}
 button:disabled{opacity:.4;cursor:default}
 button.icon{width:38px;padding:9px;text-align:center}
+a.icon{width:38px;height:38px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+  text-decoration:none;box-sizing:border-box;border-radius:4px;border:1px solid var(--line);
+  background:transparent;color:var(--ink);cursor:pointer;transition:border-color .15s,background .15s}
+a.icon:hover{border-color:var(--amber-dim);color:var(--amber)}
 
 main{padding:22px;max-width:1200px;margin:0 auto}
 #empty{text-align:center;padding:80px 20px;color:var(--ink-dim)}
@@ -118,8 +122,21 @@ input[type=range]{width:100%;accent-color:var(--amber)}
   <button id="zipBtn" class="primary" style="display:none">Descargar ZIP</button>
   <button class="primary" id="pickBtn" data-i18n="pick">Elegir carpeta</button>
   <button class="ghost" id="addBtn" data-i18n="addPhotos">Agregar fotos</button>
+  <a class="ghost icon" id="ghBtn" href="https://github.com/ElPolacoBeheran/Dark-Room" target="_blank" rel="noopener noreferrer" title="GitHub" aria-label="GitHub">
+    <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+        -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+        .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+        -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+        .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+        .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+        0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42
+        -3.58-8-8-8z"/>
+    </svg>
+  </a>
   <button class="ghost icon" id="cfgBtn" title="Config">⚙</button>
-  <input type="file" id="fileInput" webkitdirectory directory multiple accept="image/*" style="display:none">
+  <input type="file" id="fileInput" multiple accept="image/*" style="display:none">
   <input type="file" id="filesInput" multiple accept="image/*" style="display:none">
 </header>
 
@@ -239,9 +256,9 @@ let lang='en';
 
 /* ---------- i18n ---------- */
 const T = {
-  es:{ appName:'CUARTO OSCURO', noFolder:'Ninguna carpeta seleccionada', pick:'Elegir carpeta', addPhotos:'Agregar fotos',
+  es:{ appName:'CUARTO OSCURO', noFolder:'Ninguna foto cargada', pick:'Elegir fotos', addPhotos:'Agregar más',
     loaded:n=>`${n} imagen${n===1?'':'es'} cargada${n===1?'':'s'}`, dropHint:'Soltá tus fotos o una carpeta acá',
-    emptyText:'Elegí una carpeta con imágenes. Recortalas, ajustá luz y color, agregales un marco y descartá las que no sirvan. Cuando termines, descargá todo junto como un .zip a tu carpeta de Descargas — no se toca nada del disco hasta que vos lo pedís.',
+    emptyText:'Elegí fotos (podés seleccionar varias a la vez, o soltarlas acá). Recortalas, ajustá luz y color, agregales un marco y descartá las que no sirvan. Cuando termines, descargá todo junto como un .zip a tu carpeta de Descargas — no se toca nada del disco hasta que vos lo pedís.',
     saved:'Guardada', removeTitle:'Quitar del grupo',
     stats:(p,s,d)=>`<b>${p}</b> por revisar · <b>${s}</b> guardadas · <b>${d}</b> descartadas`,
     zip:n=>n>0?`Descargar ZIP (${n})`:'Descargar ZIP', zipGen:'Generando...',
@@ -254,9 +271,9 @@ const T = {
     close:'Cerrar', save:'Guardar', processing:'Procesando...',
     language:'Idioma', theme:'Tema', dark:'Oscuro', light:'Claro',
     shortcutsTitle:'Atajos de teclado', rotateReset:'Ángulo a 0°', guidesToggle:'Alternar guías', prevNext:'Foto anterior / siguiente' },
-  en:{ appName:'DARKROOM', noFolder:'No folder selected', pick:'Choose folder', addPhotos:'Add photos',
+  en:{ appName:'DARKROOM', noFolder:'No photos loaded', pick:'Choose photos', addPhotos:'Add more',
     loaded:n=>`${n} image${n===1?'':'s'} loaded`, dropHint:'Drop your photos or a folder here',
-    emptyText:"Choose a folder with images. Crop them, adjust light and color, add a frame, and discard the ones you don't want. When you're done, download everything as one .zip to your Downloads folder — nothing on disk is touched until you ask.",
+    emptyText:"Choose photos (pick several at once, or drop them here). Crop them, adjust light and color, add a frame, and discard the ones you don't want. When you're done, download everything as one .zip to your Downloads folder — nothing on disk is touched until you ask.",
     saved:'Saved', removeTitle:'Remove from group',
     stats:(p,s,d)=>`<b>${p}</b> to review · <b>${s}</b> saved · <b>${d}</b> discarded`,
     zip:n=>n>0?`Download ZIP (${n})`:'Download ZIP', zipGen:'Building...',
