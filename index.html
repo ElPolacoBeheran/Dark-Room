@@ -84,8 +84,9 @@ body.dragging::before{content:attr(data-drop-label);position:fixed;top:50%;left:
   background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .ed-stage{flex:1;display:flex;align-items:center;justify-content:center;position:relative;background:var(--stage);
   min-width:0;overflow:hidden}
-#frameMat{display:inline-block;transition:padding .15s ease,background-color .15s ease;line-height:0;max-width:100%;max-height:100%}
-.ed-canvaswrap{position:relative;transform-origin:center center;display:inline-block}
+#frameMat{position:relative;transform-origin:center center}
+#frameCanvas{position:absolute;top:0;left:0;display:none}
+.ed-canvaswrap{position:absolute;top:0;left:0}
 #baseCanvas,#overlayCanvas{display:block}
 #overlayCanvas{position:absolute;top:0;left:0}
 .navbtn{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;
@@ -178,6 +179,7 @@ input[type=range]{width:100%;accent-color:var(--amber)}
     <div class="ed-stage">
       <button class="navbtn" id="navPrev">‹</button>
       <div id="frameMat">
+        <canvas id="frameCanvas"></canvas>
         <div class="ed-canvaswrap" id="canvasWrap">
           <canvas id="baseCanvas"></canvas>
           <canvas id="overlayCanvas"></canvas>
@@ -300,6 +302,7 @@ const grid=document.getElementById('grid');
 const empty=document.getElementById('empty');
 const editor=document.getElementById('editor');
 const canvasWrap=document.getElementById('canvasWrap');
+const frameMatEl=document.getElementById('frameMat'); // carries the pan/zoom transform for the whole frame+photo unit
 const baseCanvas=document.getElementById('baseCanvas');
 const overlayCanvas=document.getElementById('overlayCanvas');
 const bctx=baseCanvas.getContext('2d');
@@ -568,9 +571,8 @@ async function openEditor(i){
     frameChoice='none'; lockRatio=null;
     document.querySelectorAll('#ratios button').forEach(b=>b.classList.toggle('on', b.dataset.r==='free'));
   }
-  previewZoom=1; panX=0; panY=0; canvasWrap.style.transform='translate(0px,0px) scale(1)';
+  previewZoom=1; panX=0; panY=0; frameMatEl.style.transform='translate(0px,0px) scale(1)';
   sel=null;
-  applyFrameMat();
   document.getElementById('edName').textContent=it.name;
   editor.classList.add('open');
 
@@ -603,18 +605,71 @@ function closeEditor(){ persistCurrentEdits(); editor.classList.remove('open'); 
 
 function fitCanvas(){
   const rad=rotation*Math.PI/180;
+  // bw/bh = the current working photo's own native pixel size (post-rotation, and post-crop once
+  // a crop has been applied, since srcBitmap itself becomes the cropped bitmap at that point).
   const bw=Math.round(Math.abs(srcBitmap.width*Math.cos(rad))+Math.abs(srcBitmap.height*Math.sin(rad)));
   const bh=Math.round(Math.abs(srcBitmap.width*Math.sin(rad))+Math.abs(srcBitmap.height*Math.cos(rad)));
+
+  // Frame margins, in native pixels, as a fraction of the photo's own short side — same formula
+  // buildFrame() uses for the final export, so the live preview always matches the saved result.
+  const hasFrame=frameChoice!=='none';
+  const cfg=hasFrame?FRAMES[frameChoice]:null;
+  const short=Math.min(bw,bh);
+  const ml=hasFrame?Math.round(short*cfg.m.l):0, mr=hasFrame?Math.round(short*cfg.m.r):0;
+  const mt=hasFrame?Math.round(short*cfg.m.t):0, mb=hasFrame?Math.round(short*cfg.m.b):0;
+  const totalW=bw+ml+mr, totalH=bh+mt+mb;
+
   // Fill as much of the actual editor stage as possible — no artificial low cap.
   const stageRect=document.querySelector('.ed-stage').getBoundingClientRect();
   const maxW=Math.max(260, stageRect.width-28);
   const maxH=Math.max(260, stageRect.height-28);
   fitScale=1; // canvas buffer stays at native resolution — only the CSS display size is scaled down
-  const dispScale=Math.min(maxW/bw, maxH/bh, 1); // never upscale past native pixels, only shrink to fit
+  const dispScale=Math.min(maxW/totalW, maxH/totalH, 1); // never upscale past native pixels, only shrink to fit
   viewScale=dispScale; // used to keep crop handles a constant on-screen size regardless of source resolution
+
   const dw=Math.round(bw*dispScale), dh=Math.round(bh*dispScale);
   [baseCanvas, overlayCanvas].forEach(c=>{ c.width=bw; c.height=bh; c.style.width=dw+'px'; c.style.height=dh+'px'; });
-  applyFrameMat();
+
+  const mat=document.getElementById('frameMat');
+  const matW=Math.round(totalW*dispScale), matH=Math.round(totalH*dispScale);
+  mat.style.width=matW+'px'; mat.style.height=matH+'px';
+  canvasWrap.style.left=Math.round(ml*dispScale)+'px';
+  canvasWrap.style.top=Math.round(mt*dispScale)+'px';
+
+  const fc=document.getElementById('frameCanvas');
+  if(hasFrame){
+    fc.width=matW; fc.height=matH; fc.style.width=matW+'px'; fc.style.height=matH+'px'; fc.style.display='block';
+    paintFrameDecor(fc.getContext('2d'), cfg, ml*dispScale, mt*dispScale, mr*dispScale, mb*dispScale, dw, dh);
+  } else {
+    fc.style.display='none';
+  }
+}
+// Draws just the frame's background + border decorations (sprockets, tape, dashed lines...) around
+// where the photo canvas will sit — used only for the live preview. Decoration details that sit
+// directly over the photo itself (vignette, inner stroke, corner dot) are covered by the photo
+// canvas layered on top, so they're skipped here and only appear in the full-resolution export.
+function paintFrameDecor(ctx,cfg,ml,mt,mr,mb,pw,ph){
+  const w=pw+ml+mr, h=ph+mt+mb;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle=cfg.bg; ctx.fillRect(0,0,w,h);
+  if(cfg.sprocketsH){ sprocketsH(ctx,ml,0,pw,mt,cfg.sprocketColor); sprocketsH(ctx,ml,h-mb,pw,mb,cfg.sprocketColor); }
+  if(cfg.sprocketsV){ sprocketsV(ctx,0,mt,ml,ph,cfg.sprocketColor); sprocketsV(ctx,w-mr,mt,mr,ph,cfg.sprocketColor); }
+  if(cfg.dashTop){
+    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=Math.max(1,mt*0.1); ctx.setLineDash([mt*0.5, mt*0.4]);
+    ctx.beginPath(); ctx.moveTo(ml,mt*0.55); ctx.lineTo(w-mr,mt*0.55); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if(cfg.tape){
+    ctx.save(); ctx.fillStyle='rgba(226,162,59,.55)'; ctx.translate(ml*0.9, mt*0.5); ctx.rotate(-0.5); ctx.fillRect(-ml*0.9,-mt*0.3,ml*1.8,mt*0.6); ctx.restore();
+    ctx.save(); ctx.fillStyle='rgba(191,227,220,.6)'; ctx.translate(w-ml*0.9, mt*0.5); ctx.rotate(0.5); ctx.fillRect(-ml*0.9,-mt*0.3,ml*1.8,mt*0.6); ctx.restore();
+  }
+  if(cfg.dashInset){
+    ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=Math.max(1,ml*0.08); ctx.setLineDash([ml*0.4, ml*0.3]);
+    ctx.strokeRect(ml*0.4, mt*0.4, w-ml*0.8, h-mt*0.4-mb*0.4); ctx.setLineDash([]);
+  }
+  if(cfg.stampCorner){
+    ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.lineWidth=Math.max(1,mr*0.08); ctx.setLineDash([mr*0.15, mr*0.15]);
+    ctx.strokeRect(w-mr*0.85, mt*0.15, mr*0.7, mt*0.7); ctx.setLineDash([]);
+  }
 }
 function rotatedCanvas(bitmap, deg){
   const rad=deg*Math.PI/180;
@@ -708,7 +763,7 @@ document.getElementById('rotM90').addEventListener('click', ()=>setRotation(rota
 document.getElementById('rotP90').addEventListener('click', ()=>setRotation(rotation+90));
 
 /* ---- zoom (wheel) + pan (right-click drag) — view only, never touches the crop ---- */
-function applyViewTransform(){ canvasWrap.style.transform=`translate(${panX}px,${panY}px) scale(${previewZoom})`; }
+function applyViewTransform(){ frameMatEl.style.transform=`translate(${panX}px,${panY}px) scale(${previewZoom})`; }
 const edStage=document.querySelector('.ed-stage');
 edStage.addEventListener('wheel', e=>{
   e.preventDefault();
@@ -895,9 +950,8 @@ document.getElementById('btnReset').addEventListener('click', async ()=>{
   srcBitmap=await createImageBitmap(it.file);
   Object.values(S).forEach(s=>s.value=0); Object.keys(V).forEach(k=>V[k].textContent='0');
   rotation=0; sRot.value=0; vRot.textContent='0°'; frameChoice='none';
-  sel=null; lockRatio=null; previewZoom=1; panX=0; panY=0; canvasWrap.style.transform='translate(0px,0px) scale(1)';
+  sel=null; lockRatio=null; previewZoom=1; panX=0; panY=0; frameMatEl.style.transform='translate(0px,0px) scale(1)';
   document.querySelectorAll('#ratios button').forEach(b=>b.classList.toggle('on', b.dataset.r==='free'));
-  applyFrameMat();
   fitCanvas(); scheduleDraw(); buildFrameIcons();
 });
 
@@ -927,22 +981,9 @@ function makeFrameIcon(key,label,canvasEl){
   b.addEventListener('click', ()=>{
     frameChoice=key;
     document.querySelectorAll('.frame-ic').forEach(x=>x.classList.toggle('on', x.dataset.key===frameChoice));
-    applyFrameMat();
+    fitCanvas(); // recomputes the margins from the photo's real pixel size and repaints the frame canvas
   });
   return b;
-}
-function applyFrameMat(){
-  const mat=document.getElementById('frameMat');
-  if(frameChoice==='none'){ mat.style.padding='0'; mat.style.background='transparent'; return; }
-  const cfg=FRAMES[frameChoice];
-  // CSS % padding resolves against the flex container's width, not this element's own size —
-  // that's what made the live mat balloon to fill the whole stage. Compute real pixels instead,
-  // using the canvas's current on-screen size, same fraction-of-short-side math as the final export.
-  const dw=baseCanvas.clientWidth||parseFloat(baseCanvas.style.width)||0;
-  const dh=baseCanvas.clientHeight||parseFloat(baseCanvas.style.height)||0;
-  const short=Math.min(dw,dh);
-  mat.style.background=cfg.bg;
-  mat.style.padding=`${Math.round(short*cfg.m.t)}px ${Math.round(short*cfg.m.r)}px ${Math.round(short*cfg.m.b)}px ${Math.round(short*cfg.m.l)}px`;
 }
 
 /* ---- save ---- */
