@@ -614,6 +614,7 @@ function fitCanvas(){
   viewScale=dispScale; // used to keep crop handles a constant on-screen size regardless of source resolution
   const dw=Math.round(bw*dispScale), dh=Math.round(bh*dispScale);
   [baseCanvas, overlayCanvas].forEach(c=>{ c.width=bw; c.height=bh; c.style.width=dw+'px'; c.style.height=dh+'px'; });
+  applyFrameMat();
 }
 function rotatedCanvas(bitmap, deg){
   const rad=deg*Math.PI/180;
@@ -934,8 +935,14 @@ function applyFrameMat(){
   const mat=document.getElementById('frameMat');
   if(frameChoice==='none'){ mat.style.padding='0'; mat.style.background='transparent'; return; }
   const cfg=FRAMES[frameChoice];
+  // CSS % padding resolves against the flex container's width, not this element's own size —
+  // that's what made the live mat balloon to fill the whole stage. Compute real pixels instead,
+  // using the canvas's current on-screen size, same fraction-of-short-side math as the final export.
+  const dw=baseCanvas.clientWidth||parseFloat(baseCanvas.style.width)||0;
+  const dh=baseCanvas.clientHeight||parseFloat(baseCanvas.style.height)||0;
+  const short=Math.min(dw,dh);
   mat.style.background=cfg.bg;
-  mat.style.padding=`${cfg.m.t*100}% ${cfg.m.r*100}% ${cfg.m.b*100}% ${cfg.m.l*100}%`;
+  mat.style.padding=`${Math.round(short*cfg.m.t)}px ${Math.round(short*cfg.m.r)}px ${Math.round(short*cfg.m.b)}px ${Math.round(short*cfg.m.l)}px`;
 }
 
 /* ---- save ---- */
