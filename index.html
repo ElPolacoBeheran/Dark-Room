@@ -84,7 +84,8 @@ body.dragging::before{content:attr(data-drop-label);position:fixed;top:50%;left:
   background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .ed-stage{flex:1;display:flex;align-items:center;justify-content:center;position:relative;background:var(--stage);
   min-width:0;overflow:hidden}
-.ed-canvaswrap{position:relative;transform-origin:center center}
+#frameMat{display:inline-block;transition:padding .15s ease,background-color .15s ease;line-height:0;max-width:100%;max-height:100%}
+.ed-canvaswrap{position:relative;transform-origin:center center;display:inline-block}
 #baseCanvas,#overlayCanvas{display:block}
 #overlayCanvas{position:absolute;top:0;left:0}
 .navbtn{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;
@@ -176,9 +177,11 @@ input[type=range]{width:100%;accent-color:var(--amber)}
   <div class="ed-wrap">
     <div class="ed-stage">
       <button class="navbtn" id="navPrev">‹</button>
-      <div class="ed-canvaswrap" id="canvasWrap">
-        <canvas id="baseCanvas"></canvas>
-        <canvas id="overlayCanvas"></canvas>
+      <div id="frameMat">
+        <div class="ed-canvaswrap" id="canvasWrap">
+          <canvas id="baseCanvas"></canvas>
+          <canvas id="overlayCanvas"></canvas>
+        </div>
       </div>
       <button class="navbtn" id="navNext">›</button>
     </div>
@@ -567,6 +570,7 @@ async function openEditor(i){
   }
   previewZoom=1; panX=0; panY=0; canvasWrap.style.transform='translate(0px,0px) scale(1)';
   sel=null;
+  applyFrameMat();
   document.getElementById('edName').textContent=it.name;
   editor.classList.add('open');
 
@@ -892,6 +896,7 @@ document.getElementById('btnReset').addEventListener('click', async ()=>{
   rotation=0; sRot.value=0; vRot.textContent='0°'; frameChoice='none';
   sel=null; lockRatio=null; previewZoom=1; panX=0; panY=0; canvasWrap.style.transform='translate(0px,0px) scale(1)';
   document.querySelectorAll('#ratios button').forEach(b=>b.classList.toggle('on', b.dataset.r==='free'));
+  applyFrameMat();
   fitCanvas(); scheduleDraw(); buildFrameIcons();
 });
 
@@ -918,8 +923,19 @@ function makeFrameIcon(key,label,canvasEl){
   b.className='frame-ic'+(frameChoice===key?' on':''); b.title=label; b.dataset.key=key; b.type='button';
   const img=document.createElement('img'); img.src=canvasEl.toDataURL('image/jpeg',0.7); img.alt=label;
   b.appendChild(img);
-  b.addEventListener('click', ()=>{ frameChoice=key; document.querySelectorAll('.frame-ic').forEach(x=>x.classList.toggle('on', x.dataset.key===frameChoice)); });
+  b.addEventListener('click', ()=>{
+    frameChoice=key;
+    document.querySelectorAll('.frame-ic').forEach(x=>x.classList.toggle('on', x.dataset.key===frameChoice));
+    applyFrameMat();
+  });
   return b;
+}
+function applyFrameMat(){
+  const mat=document.getElementById('frameMat');
+  if(frameChoice==='none'){ mat.style.padding='0'; mat.style.background='transparent'; return; }
+  const cfg=FRAMES[frameChoice];
+  mat.style.background=cfg.bg;
+  mat.style.padding=`${cfg.m.t*100}% ${cfg.m.r*100}% ${cfg.m.b*100}% ${cfg.m.l*100}%`;
 }
 
 /* ---- save ---- */
